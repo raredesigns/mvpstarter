@@ -7,10 +7,7 @@ const Home = () => {
     <section className="grid">
       <Hero />
       <FileUpload/>
-      <video className="w-full h-auto max-w-full rounded mt-12" controls>
-        {/* <source src=""/> */}
-        Your browser does not support the video tag.
-      </video>
+      {/* <video className="w-full h-auto max-w-full rounded mt-12" controls><source src=""/></video> */}
     </section>
   );
 };

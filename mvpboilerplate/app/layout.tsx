@@ -9,7 +9,7 @@ const ubuntu = Ubuntu({
 });
 
 export const metadata = {
-  title: "TableSense",
+  title: "DocuSense",
   description: "SaaS Boilerplate Template",
 };
 

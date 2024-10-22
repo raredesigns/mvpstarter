@@ -1,4 +1,4 @@
-'use server'
+'use server';
 
 import { DocumentProcessorServiceClient } from '@google-cloud/documentai';
 
@@ -8,7 +8,24 @@ const projectId = process.env.GOOGLE_CLOUD_PROJECT_ID;
 const location = 'us'; // adjust this if your processor is in a different location
 const processorId = process.env.GOOGLE_CLOUD_PROCESSOR_ID;
 
-export async function processDocument(formData: FormData) {
+type Cell = {
+  text: string;
+};
+
+type Row = {
+  cells: Cell[];
+};
+
+type Table = {
+  headerRows: Row[];
+  bodyRows: Row[];
+};
+
+type ProcessedTables = {
+  tables: Table[];
+};
+
+export async function processDocument(formData: FormData): Promise<ProcessedTables> {
   const file = formData.get('file') as File;
   if (!file) {
     throw new Error('No file uploaded');
@@ -27,7 +44,6 @@ export async function processDocument(formData: FormData) {
   };
 
   try {
-    console.log('Sending request to Document AI:', JSON.stringify(request, null, 2));
     const [result] = await client.processDocument(request);
     console.log('Received response from Document AI:', JSON.stringify(result, null, 2));
 
@@ -36,35 +52,36 @@ export async function processDocument(formData: FormData) {
       throw new Error('No document or pages found in the result');
     }
 
-    const tables = document.pages.flatMap(page => page.tables || []);
-
     // Helper function to extract text from textSegments
-    const extractText = (textSegments: any[]) => {
+    const extractText = (textSegments: any[]): string => {
       return textSegments?.map(segment => segment.content || '').join(' ').trim() || '';
     };
 
-    // Convert tables to markdown format
-    const markdownTables = tables.map((table, index) => {
-      const bodyRows = table.bodyRows || [];
-      const headerRows = table.headerRows || [];
+    // Extract tables from the response and convert them to our Table format
+    const processedTables: ProcessedTables = {
+      tables: document.pages.flatMap((page: any) => {
+        const tables = page.tables || [];
+        return tables.map((table: any): Table => {
+          const headerRows = table.headerRows || [];
+          const bodyRows = table.bodyRows || [];
 
-      if (headerRows.length === 0 || !headerRows[0].cells) {
-        return `Table ${index + 1}: No header rows or cells found.`;
-      }
+          return {
+            headerRows: headerRows.map((row: any): Row => ({
+              cells: (row.cells || []).map((cell: any): Cell => ({
+                text: extractText(cell?.layout?.textAnchor?.textSegments || [])
+              }))
+            })),
+            bodyRows: bodyRows.map((row: any): Row => ({
+              cells: (row.cells || []).map((cell: any): Cell => ({
+                text: extractText(cell?.layout?.textAnchor?.textSegments || [])
+              }))
+            }))
+          };
+        });
+      })
+    };
 
-      // Process header row
-      const header = '| ' + headerRows[0].cells.map(cell => extractText(cell?.layout?.textAnchor?.textSegments || [])).join(' | ') + ' |';
-      const separator = '|' + headerRows[0].cells.map(() => '---').join('|') + '|';
-
-      // Process body rows
-      const rows = bodyRows.map(row =>
-        '| ' + (row?.cells?.map(cell => extractText(cell?.layout?.textAnchor?.textSegments || [])).join(' | ') || '') + ' |'
-      );
-
-      return `Table ${index + 1}:\n\n${header}\n${separator}\n${rows.join('\n')}`;
-    });
-
-    return markdownTables.join('\n\n');
+    return processedTables;
   } catch (error: any) {
     console.error('Error processing document:', error);
     throw new Error(`Error processing document: ${error.message}`);
